@@ -106,7 +106,7 @@ class LineSegment:
 # ===================================================================================================
 
 def normal_vec_triangle(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
-    """Calculate the normal vector of a 3D triangle given three points.    
+    """Calculate the normal vector of a 3D triangle given three points, this vector will always facing upward.
     Returns:
         numpy.ndarray: A unit normal vector to the triangle as a NumPy array.
     """
@@ -147,7 +147,6 @@ def random_sample_points(raster: rasterio.io.DatasetReader, thinning: float):
     rng = np.random.default_rng()
     sampled_indexes = rng.choice(pixel_num, size=sample_num, replace=False, p=prob_mask)
 
-    # print("Probability array:", prob_mask)
     print("Pixel count:", pixel_num)
     print("No-data count:", pixel_num - valid_pixel_num)
     print("Sample count:", len(np.unique(sampled_indexes)))
@@ -296,7 +295,7 @@ def extract_isolines_from_dt(dt: startinpy.DT, z_range: range):
                 line_seg_arr = np.append(line_seg_arr, line_seg, axis=0)
         
         all_segments[target_z] = line_seg_arr
-    print("Extracted target z:", list(z_range), end="\r")
+    print("Extracted contours at:", list(z_range), end="\r")
     # print(all_segments)
 
     return all_segments
@@ -367,7 +366,6 @@ def main():
     except:
         parser.error("range invalid")
     myrange = range(tmp[0], tmp[1], tmp[2])
-    print("Extracting the contours at:", list(myrange))
 
     # -- load in memory the input GeoTIFF
     try:
@@ -376,7 +374,7 @@ def main():
         print(e)
         sys.exit()
 
-
+    print("\nRaster file metedata:")
     print("name:", d.name)
     print("crs:", d.crs.to_string())
     print("size:", d.shape)
@@ -392,6 +390,7 @@ def main():
 
     # Building delaunay triangulation surface
     print("\nBuilding DT...")
+    print("Snapping tolerance:", tolerance)
     dt = startinpy.DT()
     dt.snap_tolerance = tolerance
     dt.insert(points, insertionstrategy="BBox")
