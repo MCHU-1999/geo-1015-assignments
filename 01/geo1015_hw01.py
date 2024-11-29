@@ -43,12 +43,23 @@ class LineSegment:
 
     def __lt__(self, value):
         if isinstance(value, LineSegment):
-            if self.tail.sum() < value.tail.sum():
+            if self.__eq__(value):
+                return False
+            elif self.tail[0] < value.tail[0]:
                 return True
             else:
                 return self.head.sum() < value.head.sum()
         else:
-            return False
+            raise Exception("Comparing <LineSegment object> is only possible with another <LineSegment object>.")
+            
+    def __gt__(self, value):
+        if isinstance(value, LineSegment):
+            if self.__eq__(value):
+                return False
+            else:
+                return not self.__lt__(value)
+        else:
+            raise Exception("Comparing <LineSegment object> is only possible with another <LineSegment object>.")
     
     def reverse(self):
         """Reverse the direction of this line segment (vector) directly.
@@ -149,7 +160,7 @@ def random_sample_points(raster: rasterio.io.DatasetReader, thinning: float):
 
     print("Pixel count:", pixel_num)
     print("No-data count:", pixel_num - valid_pixel_num)
-    print("Sample count:", len(np.unique(sampled_indexes)))
+    print("Sample count:", sampled_indexes)
 
     sampled_col = [index % raster.width for index in sampled_indexes]
     sampled_row = [index // raster.width for index in sampled_indexes]
@@ -196,7 +207,7 @@ def extract_isoline_from_triangle(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndar
     Returns:
         numpy.ndarray: LineSegment object with target z value in a triangle.
     """
-    duplicates_flag = True
+    # duplicates_flag = True
     if pt1[2] == pt2[2] and pt1[2] == pt3[2] and pt1[2] == target_z:
         pt_array = np.vstack((pt1, pt2, pt3))
     elif pt1[2] == pt2[2] and pt1[2] == target_z:
@@ -206,7 +217,7 @@ def extract_isoline_from_triangle(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndar
     elif pt1[2] == pt3[2] and pt3[2] == target_z:
         pt_array = np.vstack((pt3, pt1))
     else:
-        duplicates_flag = False
+        # duplicates_flag = False
         result_12 = interpolate_xy_with_z(pt1, pt2, target_z)
         result_23 = interpolate_xy_with_z(pt2, pt3, target_z)
         result_31 = interpolate_xy_with_z(pt3, pt1, target_z)
@@ -224,59 +235,27 @@ def extract_isoline_from_triangle(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndar
             # intersects with 2 points (common case)
             line_seg = np.array([])
             seg = LineSegment(pt_array[0], pt_array[1])
-
-            # filter duplicates
-            if duplicates_flag:
-                normal_vec = seg.normal_vec_2d()
-                if normal_vec[1] > 0 or (normal_vec[1] == 0 and normal_vec[0] > 0):
-                    line_seg = np.append(line_seg, seg)
-            else:
-                line_seg = np.append(line_seg, seg)
+            line_seg = np.append(line_seg, seg)
 
             # re-orient
             normal_tri = normal_vec_triangle(pt1, pt2, pt3)
             cp = np.cross(seg.vector, normal_tri)
-            if normal_tri[0] * cp[0] > 0 or normal_tri[1] * cp[1] > 0 :
+            if normal_tri[0] * cp[0] >= 0 and normal_tri[1] * cp[1] >= 0:
                 pass
             else:
                 seg.reverse()
                         
             return line_seg
 
-        case 3:     
+        case 3:
             # intersects with 3 points (whole triangle)
-            line_seg = np.array([])
-
-            for i in range(3):
-                seg = LineSegment(pt_array[i], pt_array[(i+1)%3])
-
-                # filter duplicates
-                normal_vec = seg.normal_vec_2d()
-                if normal_vec[1] > 0 or (normal_vec[1] == 0 and normal_vec[0] > 0):
-                    line_seg = np.append(line_seg, seg)
-
-            return line_seg
+            return np.array([])
 
         case _:
             # default pattern (error handling)
             print(f"Error: Length of 'pt_array' should be exact 1, 2 or 3, but got length of {len(pt_array)}")
             print("pt_array:", pt_array)
             sys.exit()
-
-
-def find_duplicate(arr):
-    """(used for devlopment) To find out the duplicated LineSegment object in an array.
-    """
-    uni_line_seg_arr, counts = np.unique(arr, return_counts=True)
-    print("len(original):", len(arr))
-    print("len(unique):", len(uni_line_seg_arr))
-
-    for i, each in enumerate(counts):
-        if each != 1:
-            print(np.where(arr == uni_line_seg_arr[i]))
-            for j in np.where(arr == uni_line_seg_arr[i])[0]:
-                print(j)
-                print(arr[i].triangle)
 
 
 def extract_isolines_from_dt(dt: startinpy.DT, z_range: range):
@@ -294,7 +273,7 @@ def extract_isolines_from_dt(dt: startinpy.DT, z_range: range):
                 line_seg = extract_isoline_from_triangle(pt1, pt2, pt3, target_z)
                 line_seg_arr = np.append(line_seg_arr, line_seg, axis=0)
         
-        all_segments[target_z] = line_seg_arr
+        all_segments[target_z] = np.unique(line_seg_arr)
     print("Extracted contours at:", list(z_range), end="\r")
     # print(all_segments)
 
