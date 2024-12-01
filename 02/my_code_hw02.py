@@ -1,7 +1,7 @@
 # -- my_code_hw02.py
 # -- geo1015.2024.hw02
-# -- [YOUR NAME]
-# -- [YOUR STUDENT NUMBER]
+# -- Ming-Chieh Hu
+# -- 6186416
 
 
 import time
