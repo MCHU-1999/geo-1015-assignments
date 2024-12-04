@@ -4,24 +4,22 @@
 # -- 6186416
 
 
-import time
-
 import numpy as np
 import startinpy
 from tqdm import tqdm
 import math
 
-def invalid_error(error):
-    """If error lower than 10^-5 I'd say it's neglectable.
-    """
-    return abs(error) > 0.00001
 
-def cross_2d(x, y):
-    return x[0] * y[1] - x[1] * y[0]
+def distance_3d(pt1: np.ndarray, pt2: np.ndarray):
+    vec = pt2 - pt1
+    return math.sqrt(sum([x**2 for x in vec]))
 
 def distance_2d(pt1: np.ndarray, pt2: np.ndarray):
     vec = pt2[:2] - pt1[:2]
     return math.sqrt(sum([x**2 for x in vec]))
+
+def cross_2d(x, y):
+    return x[0] * y[1] - x[1] * y[0]
 
 def normal_vec_2d(pt1: np.ndarray, pt2: np.ndarray):
     vec = pt2[:2] - pt1[:2]
@@ -53,16 +51,19 @@ def circumcenter_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
 
     return line_intersection(mid_12, n1, mid_13, n2)
 
+def invalid_error(error):
+    """If error lower than 10^-5 I'd say it's neglectable.
+    """
+    return abs(error) > 0.00001
+
 def interpolate_linear(dt, x, y):
     """Function that interpolates at location (x,y) in a DT with the linear in TIN interpolation.
-    
-    Inputs:
+    Parameters:
         dt: the startinpy DT
         x:  coordinate x to interpolate
         y:  coordinate y to interpolate
-    
-    Output:
-        - the estimated value for z
+    Returns:
+        z: the estimated value for z
         - np.nan if outside the convex hull (impossible to interpolate)
         (NaN: https://numpy.org/doc/stable/reference/constants.html#numpy.nan)
     """
@@ -83,10 +84,10 @@ def interpolate_linear(dt, x, y):
     
     # Solving the equation with 3 coefficients from sarea_2d()
     tri_area = sarea_2d(pt1, pt2, pt3)
-    w0 = sarea_2d(P, pt2, pt3) / tri_area
-    w1 = sarea_2d(pt1, P, pt3) / tri_area
-    w2 = sarea_2d(pt1, pt2, P) / tri_area
-    result_pt = w0*pt1 + w1*pt2 + w2*pt3
+    w1 = sarea_2d(P, pt2, pt3) / tri_area
+    w2 = sarea_2d(pt1, P, pt3) / tri_area
+    w3 = sarea_2d(pt1, pt2, P) / tri_area
+    result_pt = w1*pt1 + w2*pt2 + w3*pt3
 
     # gt = dt.interpolate({"method": "TIN"}, [[x, y]])[0]
     # if invalid_error(gt - result_pt[2]):
@@ -99,14 +100,12 @@ def interpolate_linear(dt, x, y):
 
 def interpolate_laplace(dt, x, y):
     """Function that interpolates at location (x,y) in a DT with the Laplace interpolation.
-
-    Inputs:
+    Parameters:
         dt: the startinpy DT
         x:  coordinate x to interpolate
         y:  coordinate y to interpolate
-
-    Output:
-        - the estimated value for z
+    Returns:
+        z: the estimated value for z
         - np.nan if outside the convex hull (impossible to interpolate)
         (NaN: https://numpy.org/doc/stable/reference/constants.html#numpy.nan)
     """
@@ -163,25 +162,145 @@ def interpolate_laplace(dt, x, y):
     return z
 
 
-def gftin(pts, resolution, max_dist, max_angle):
-    """Function that performs ground filtering using TIN refinement and returns the DT.
 
-    Inputs:
+
+def primary_tin(pts: np.ndarray, resolution: int = 20):
+    """Generate the rudimentary initial TIN needed for ground filtering.
+    Returns:
+        dt: the rudimentary DT (lowest points in each grid cell)
+    """
+
+    def get_filter_grid(pts: np.ndarray, resolution: int = 20):
+        """Get filter grid from points and resolution.
+        Returns:
+            tuple: (xmin, ymin), grid
+            1. starting coordinates (x_min, y_min)
+            2. grid: the grid containing all the lowest points, np.array with shape(width, height, 3).
+        """
+        x_max = np.max(pts[:,0])
+        x_min = np.min(pts[:,0])
+        y_max = np.max(pts[:,1])
+        y_min = np.min(pts[:,1])
+
+        width = int((x_max - x_min) // resolution) + 1
+        height = int((y_max - y_min) // resolution) + 1
+
+        default = np.full(3, np.inf)
+        grid = np.full((height, width, 3), default)
+        return (x_min, y_min), grid
+
+
+    (x_min, y_min), grid = get_filter_grid(pts, resolution)
+    
+    for pt in pts:
+        w_pos = int((pt[0] - x_min) // resolution)
+        h_pos = int((pt[1] - y_min) // resolution)
+        
+        if pt[2] < grid[h_pos][w_pos][2]:
+            grid[h_pos][w_pos] = pt
+
+    sampled_pts = grid.reshape(-1, 3)
+    dt = startinpy.DT()
+    dt.insert(sampled_pts)
+
+    return dt
+
+def angle_3pt(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
+    """Calculate angle of ∠123 (pt2 is the pivot).
+    Returns:
+        float: angle in radians (between 0 and pi).
+    """
+    v1 = pt1 - pt2
+    v2 = pt3 - pt2
+    magnitudes = distance_3d(pt1, pt2) * distance_3d(pt3, pt2)
+    if magnitudes == 0:
+        return 0
+    
+    cosine = np.dot(v1, v2) / magnitudes
+    cosine = min(cosine, 1) if cosine > 1 else max(cosine, -1)
+    
+    return math.acos(cosine)
+
+
+def distance_angle_p(pt: np.ndarray, pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
+    """Calculate distance and the max angle from a point to a plane (formed by 3 points).
+    Returns:
+        tuple: (dis, ang)
+        1. dis: perpendicular distance from point pt to triangle (pt1, pt2, pt3)
+        2. max angle from a point (pt) to 3 points (pt1, pt2, pt3).
+    """
+    
+    vec1 = pt2 - pt1
+    vec2 = pt3 - pt1
+    A = np.column_stack((vec1, vec2))
+    b = pt - pt1
+
+    try:    # Find the least square solution of Ax = b
+        w1, w2 = np.linalg.lstsq(A, b)[0]
+    except np.linalg.LinAlgError:
+        # Handles parallel lines (this shouldn't happen)
+        return None
+    
+    lstsq_pt = pt1 + w1 * vec1 + w2 * vec2
+
+    dis = distance_3d(pt, lstsq_pt)
+    
+    ang = max(
+        angle_3pt(pt, pt1, lstsq_pt),
+        angle_3pt(pt, pt2, lstsq_pt),
+        angle_3pt(pt, pt3, lstsq_pt)
+    )
+
+    return dis, ang
+    
+
+def gftin(pts: np.ndarray, resolution: int, max_dist: float, max_angle: float):
+    """Function that performs ground filtering using TIN refinement and returns the DT.
+    Parameters:
         pts:        the Nx3 numpy array of the PC
         resolution: resolution (cellsize) for the initial grid that is computed as part of the ground filtering algorithm,
         max_dist:   distance_2d threshold used in the ground filtering algorithm,
         max_angle:  angle threshold used in the ground filtering algorithm in degrees,
-
-    Output:
-        the startinpy DT of the ground
+    Returns:
+        dt: the startinpy DT of the ground
     """
-    # -- generate 100 points randomly in the plane
-    rng = np.random.default_rng(seed=42)
-    pts = rng.random((100, 3))
-    pts = pts * 100
-    dt = startinpy.DT()
-    dt.insert(pts, insertionstrategy="AsIs")
-    # -- showcase for tqdm package to see progress of a loop
-    for i in tqdm(range(500)):
-        time.sleep(0.01)
+    dt = primary_tin(pts, resolution)
+    pts_copy = np.copy(pts)
+    loop_count = 1
+
+    while True:
+
+        failed = np.full(len(pts_copy), False)
+        to_delete = []
+        skip_count = 0
+        print(f"densifying... loop {loop_count}", end="\r")
+
+        for i, pt in enumerate(pts_copy):
+            try:
+                triangle = dt.locate(pt[:2])
+            except Exception as e:
+                # print("Point not in convex hull, skipped.")
+                failed[i] = True
+                skip_count += 1
+                continue
+
+            pt1 = dt.get_point(triangle[0])
+            pt2 = dt.get_point(triangle[1])
+            pt3 = dt.get_point(triangle[2])
+            dis, ang = distance_angle_p(pt, pt1, pt2, pt3)
+
+            if dis <= max_dist and ang <= max_angle:
+                dt.insert_one_pt(pt)
+                to_delete.append(i)
+            else:
+                failed[i] = True
+        
+        pts_copy = np.delete(pts_copy, to_delete, axis=0)
+        loop_count += 1
+        
+        if failed.all():
+            break
+    
+    print(f"Done - None of the remaining points pass the ground test.")
+    print(f"{skip_count} points out of convex hull skipped.")
     return dt
