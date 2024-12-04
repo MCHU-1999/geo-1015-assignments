@@ -19,6 +19,7 @@ import numpy as np
 import polyscope as ps
 import rasterio
 import startinpy
+from tqdm import tqdm
 
 
 def main():
@@ -72,10 +73,10 @@ def main():
     # -- DTM with GFTIN
     print("=== DTM with GFTIN ===")
     pts_all = get_points(lazfile, thinning=args.input_thinning)
-    dt = my_code_hw02.gftin(pts_all, args.resolution, args.max_dist, args.max_angle)
-    grid_gftin = rasterise("Linear", dt, bbox)
+    dt2 = my_code_hw02.gftin(pts_all, args.resolution, args.max_dist, args.max_angle)
+    grid_gftin = rasterise("Linear", dt2, bbox)
     write_grid_to_disk("dtm_gftin.tiff", grid_gftin, (bbox[0], bbox[3]), 1.0)
-    # view_polyscope(dt2, pts_ng)
+    view_polyscope(dt2, pts_ng)
 
 
 def get_points(lazfile, classification=None, thinning=1):
@@ -119,7 +120,7 @@ def rasterise(method, dt, bbox, cellsize=1.0):
     deltay = math.ceil((bbox[3] - bbox[1]) / cellsize)
     centres = []
     i = 0
-    for row in range((deltay - 1), -1, -1):
+    for row in tqdm(range((deltay - 1), -1, -1)):
         j = 0
         y = bbox[1] + (row * cellsize) + (cellsize / 2)
         for col in range(deltax):
