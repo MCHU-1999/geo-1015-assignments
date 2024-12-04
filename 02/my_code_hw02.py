@@ -3,12 +3,19 @@
 # -- Ming-Chieh Hu
 # -- 6186416
 
-
 import numpy as np
 import startinpy
-from tqdm import tqdm
 import math
 
+
+# ===================================================================================================
+# == helper functions
+# ===================================================================================================
+
+def invalid_error(error):
+    """If error lower than 10^-5 I'd say it's neglectable.
+    """
+    return abs(error) > 0.00001
 
 def distance_3d(pt1: np.ndarray, pt2: np.ndarray):
     vec = pt2 - pt1
@@ -26,35 +33,18 @@ def normal_vec_2d(pt1: np.ndarray, pt2: np.ndarray):
     return np.array([-vec[1], vec[0]])
 
 def sarea_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
-    n1 = pt2[:2] - pt1[:2]
-    n2 = pt3[:2] - pt1[:2]
-    return cross_2d(n1, n2) / 2.0
-
-def circumcenter_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
-
-    def line_intersection(mid1: np.ndarray, n1: np.ndarray, mid2: np.ndarray, n2: np.ndarray):
-        A = np.column_stack((n1, -n2))
-        b = mid2 - mid1
-        
-        try:    # Solve Ax = b
-            t = np.linalg.solve(A, b)[0]
-            return mid1 + t * n1
-        except np.linalg.LinAlgError:
-            # Handles parallel lines (this shouldn't happen)
-            return None
-
-    # Get mid points and normal vectors of two sides
-    mid_12 = (pt1[:2] + pt2[:2]) / 2.0
-    mid_13 = (pt1[:2] + pt3[:2]) / 2.0
-    n1 = normal_vec_2d(pt1, pt2)
-    n2 = normal_vec_2d(pt1, pt3)
-
-    return line_intersection(mid_12, n1, mid_13, n2)
-
-def invalid_error(error):
-    """If error lower than 10^-5 I'd say it's neglectable.
+    """Signed area
+    Returns:
+        signed-area: area with sign corresponding to its normal vector (+ or -).
     """
-    return abs(error) > 0.00001
+    v1 = pt2[:2] - pt1[:2]
+    v2 = pt3[:2] - pt1[:2]
+    return cross_2d(v1, v2) / 2.0
+
+
+# ===================================================================================================
+# == interpolate_linear() & its helper functions
+# ===================================================================================================
 
 def interpolate_linear(dt, x, y):
     """Function that interpolates at location (x,y) in a DT with the linear in TIN interpolation.
@@ -97,6 +87,31 @@ def interpolate_linear(dt, x, y):
 
     return result_pt[2]
 
+
+# ===================================================================================================
+# == interpolate_laplace() & its helper functions
+# ===================================================================================================
+
+def circumcenter_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
+
+    def line_intersection(mid1: np.ndarray, n1: np.ndarray, mid2: np.ndarray, n2: np.ndarray):
+        A = np.column_stack((n1, -n2))
+        b = mid2 - mid1
+        
+        try:    # Solve Ax = b
+            t = np.linalg.solve(A, b)[0]
+            return mid1 + t * n1
+        except np.linalg.LinAlgError:
+            # Handles parallel lines (this shouldn't happen)
+            return None
+
+    # Get mid points and normal vectors of two sides
+    mid_12 = (pt1[:2] + pt2[:2]) / 2.0
+    mid_13 = (pt1[:2] + pt3[:2]) / 2.0
+    n1 = normal_vec_2d(pt1, pt2)
+    n2 = normal_vec_2d(pt1, pt3)
+
+    return line_intersection(mid_12, n1, mid_13, n2)
 
 def interpolate_laplace(dt, x, y):
     """Function that interpolates at location (x,y) in a DT with the Laplace interpolation.
@@ -162,35 +177,40 @@ def interpolate_laplace(dt, x, y):
     return z
 
 
+# ===================================================================================================
+# == GFTIN & its helper functions
+# ===================================================================================================
 
+def get_filter_grid(pts: np.ndarray, resolution: int = 20):
+    """Get filter grid from points and resolution.
+    Returns:
+        tuple: (x_min, y_min), (width, height), grid
+        1. starting coordinates (x_min, y_min)
+        2. grid size in terms of (width, height)
+        3. grid: the grid containing all the lowest points, np.array with shape(width, height, 3).
+    """
+    x_max = np.max(pts[:,0])
+    x_min = np.min(pts[:,0])
+    y_max = np.max(pts[:,1])
+    y_min = np.min(pts[:,1])
+
+    width = int((x_max - x_min) // resolution) + 1
+    height = int((y_max - y_min) // resolution) + 1
+
+    default = np.full(3, np.inf)
+    grid = np.full((height, width, 3), default)
+    
+    return (x_min, y_min), (width, height), grid
 
 def primary_tin(pts: np.ndarray, resolution: int = 20):
     """Generate the rudimentary initial TIN needed for ground filtering.
     Returns:
-        dt: the rudimentary DT (lowest points in each grid cell)
+        tuple: (dt, padding_pts)
+        1. dt: the rudimentary DT (lowest points in each grid cell)
+        2. padding_pts: the indices of padding points in TIN
     """
 
-    def get_filter_grid(pts: np.ndarray, resolution: int = 20):
-        """Get filter grid from points and resolution.
-        Returns:
-            tuple: (xmin, ymin), grid
-            1. starting coordinates (x_min, y_min)
-            2. grid: the grid containing all the lowest points, np.array with shape(width, height, 3).
-        """
-        x_max = np.max(pts[:,0])
-        x_min = np.min(pts[:,0])
-        y_max = np.max(pts[:,1])
-        y_min = np.min(pts[:,1])
-
-        width = int((x_max - x_min) // resolution) + 1
-        height = int((y_max - y_min) // resolution) + 1
-
-        default = np.full(3, np.inf)
-        grid = np.full((height, width, 3), default)
-        return (x_min, y_min), grid
-
-
-    (x_min, y_min), grid = get_filter_grid(pts, resolution)
+    (x_min, y_min), (width, height), grid = get_filter_grid(pts, resolution)
     
     for pt in pts:
         w_pos = int((pt[0] - x_min) // resolution)
@@ -202,8 +222,16 @@ def primary_tin(pts: np.ndarray, resolution: int = 20):
     sampled_pts = grid.reshape(-1, 3)
     dt = startinpy.DT()
     dt.insert(sampled_pts)
+    num_pts = dt.number_of_vertices() + 1
 
-    return dt
+    # padding points to enlarge the convex hull
+    dt.insert([[pt[0], pt[1] - 2*resolution, pt[2]] for pt in grid[0]])
+    dt.insert([[pt[0], pt[1] + 2*resolution, pt[2]] for pt in grid[-1]])
+    dt.insert([[pt[0] - 2*resolution, pt[1], pt[2]] for pt in grid[:,0]])
+    dt.insert([[pt[0] + 2*resolution, pt[1], pt[2]] for pt in grid[:,-1]])
+    padding_pts = np.arange(num_pts, num_pts + 2*width + 2*height)
+
+    return dt, padding_pts
 
 def angle_3pt(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
     """Calculate angle of ∠123 (pt2 is the pivot).
@@ -214,6 +242,7 @@ def angle_3pt(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
     v2 = pt3 - pt2
     magnitudes = distance_3d(pt1, pt2) * distance_3d(pt3, pt2)
     if magnitudes == 0:
+        # 3 pts are very close, so returns a tiny angle.
         return 0
     
     cosine = np.dot(v1, v2) / magnitudes
@@ -221,13 +250,12 @@ def angle_3pt(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
     
     return math.acos(cosine)
 
-
 def distance_angle_p(pt: np.ndarray, pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
     """Calculate distance and the max angle from a point to a plane (formed by 3 points).
     Returns:
         tuple: (dis, ang)
         1. dis: perpendicular distance from point pt to triangle (pt1, pt2, pt3)
-        2. max angle from a point (pt) to 3 points (pt1, pt2, pt3).
+        2. ang: max angle from a point (pt) to 3 points (pt1, pt2, pt3).
     """
     
     vec1 = pt2 - pt1
@@ -235,7 +263,8 @@ def distance_angle_p(pt: np.ndarray, pt1: np.ndarray, pt2: np.ndarray, pt3: np.n
     A = np.column_stack((vec1, vec2))
     b = pt - pt1
 
-    try:    # Find the least square solution of Ax = b
+    try:
+        # Find the least square solution of Ax = b
         w1, w2 = np.linalg.lstsq(A, b)[0]
     except np.linalg.LinAlgError:
         # Handles parallel lines (this shouldn't happen)
@@ -264,7 +293,8 @@ def gftin(pts: np.ndarray, resolution: int, max_dist: float, max_angle: float):
     Returns:
         dt: the startinpy DT of the ground
     """
-    dt = primary_tin(pts, resolution)
+
+    dt, padding_pts = primary_tin(pts, resolution)
     pts_copy = np.copy(pts)
     loop_count = 1
 
@@ -300,7 +330,15 @@ def gftin(pts: np.ndarray, resolution: int, max_dist: float, max_angle: float):
         
         if failed.all():
             break
-    
+
     print(f"Done - None of the remaining points pass the ground test.")
-    print(f"{skip_count} points out of convex hull skipped.")
+    print(f"{skip_count} point out of convex hull skipped.")
+    print(f"Remove {len(padding_pts)} padding points")
+    for i in padding_pts:
+        try:
+            dt.remove(i)
+        except Exception as e:
+            print("Padding points removal failed, please check your output.")
+    
+    print(f"{dt.number_of_vertices()} finite points in DT.")
     return dt
