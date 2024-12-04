@@ -2,5 +2,5 @@
 
 My digital terrain modelling assignments 🗻
 
-See [TUDelft GitLab repository of the course](https://gitlab.tudelft.nl/3d/geo1015.2024/) for the codebase.
+See [course website](https://3d.bk.tudelft.nl/courses/geo1015/) for more content.
 
