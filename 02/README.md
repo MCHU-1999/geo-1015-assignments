@@ -47,24 +47,6 @@ No external libraries may be used except those in `requirements.txt`. Standard P
 
 ---
 
-## What You Need to Do
-1. **Do not modify the main file (`geo1015_hw02.py`)**; the main function will be tested independently.
-2. Complete these functions in `my_code_hw02.py`:
-   - `interpolate_linear(dt, x, y)`
-   - `interpolate_laplace(dt, x, y)`
-   - `gftin(pts, resolution, max_dist, max_angle)`
-3. Adhere to the function APIs/signatures provided.
-
----
-
-## Good to Know
-- All code must go in `my_code_hw02.py`. Additional helper functions can be added to this file.
-- Program runtime will not affect marks.
-- Pre-built functions that solve the problem cannot be used.
-- Do not use `startinpy.DT.interpolate()`; interpolation steps must be manually implemented.
-
----
-
 ## Marking
 
 | Criterion                              | Points |
@@ -73,17 +55,3 @@ No external libraries may be used except those in `requirements.txt`. Standard P
 | Linear in TIN interpolation implementation           | 1.0    |
 | Laplace interpolation implementation                 | 3.0    |
 | GFTIN implementation                                 | 4.0    |
-
----
-
-## What to Submit and How to Submit It
-
-- Submit **one file**: `my_code_hw02.py`.
-- Include your name and student number at the top of the file.
-- **No report necessary.**
-
-### Submission Options
-1. Upload the file to this [Dropbox page](https://www.dropbox.com/request/kjWVsSfgADMQY8m8EeoH).
-2. Alternatively, create a private GitHub repository, add the instructor as a collaborator (`@hugoledoux`), and upload a simple text file with your name, student number, and the repository URL. The latest version of `my_code_hw02.py` will be used for marking.
-
-_Last updated: 2024-11-29 07:37_
