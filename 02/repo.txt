@@ -1,0 +1,3 @@
+Name: Ming-Chieh Hu
+Student number: 6186416
+URL of the repository: https://github.com/MCHU-1999/geo-1015-assignments/tree/main/02
