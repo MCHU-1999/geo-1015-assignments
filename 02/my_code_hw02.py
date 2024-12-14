@@ -43,7 +43,7 @@ def sarea_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
 
 
 # ===================================================================================================
-# == interpolate_linear() & its helper functions
+# == interpolate_linear()
 # ===================================================================================================
 
 def interpolate_linear(dt, x, y):
@@ -79,6 +79,7 @@ def interpolate_linear(dt, x, y):
     w3 = sarea_2d(pt1, pt2, P) / tri_area
     result_pt = w1*pt1 + w2*pt2 + w3*pt3
 
+    # Test if I got the correct answer
     # gt = dt.interpolate({"method": "TIN"}, [[x, y]])[0]
     # if invalid_error(gt - result_pt[2]):
     #     print("expect:", gt)
@@ -89,7 +90,7 @@ def interpolate_linear(dt, x, y):
 
 
 # ===================================================================================================
-# == interpolate_laplace() & its helper functions
+# == interpolate_laplace() & circumcenter_2d()
 # ===================================================================================================
 
 def circumcenter_2d(pt1: np.ndarray, pt2: np.ndarray, pt3: np.ndarray):
@@ -168,6 +169,7 @@ def interpolate_laplace(dt, x, y):
     z = sum(np.multiply(weights, dt_vertices_z))/ sum(weights)
     dt.remove(p_i)
 
+    # Test if I got the correct answer
     # gt = dt.interpolate({"method": "Laplace"}, [[x, y]])[0]
     # if invalid_error(gt - z):
     #     print("expect:", gt)
